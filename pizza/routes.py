@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for
+from flask import render_template, request, redirect, url_for, session
 from . import pizza
 from models import db, Cliente, Pizza, Pedido, DetallePedido
 import forms
@@ -10,10 +10,14 @@ def lista_pizza():
 
     form = forms.PizzaForm()
     pedidos = []
-    mensaje= ""
+    mensaje = ""
+
+    if 'pedidos_temp' not in session:
+        session['pedidos_temp'] = []
+    pedidos_temp = session.get('pedidos_temp', [])
 
     nombres_ingredientes = {
-        '10_jamon': 'Jamón',
+        '10_jamon': 'Jamon',
         '10_pina': 'Piña',
         '10_champi': 'Champiñones'
     }
@@ -24,92 +28,109 @@ def lista_pizza():
         '120': 'Grande'
     }
 
+    if request.method == "POST":
 
-    if 'agregar' in request.form and form.validate_on_submit():
+        if 'agregar' in request.form and form.validate_on_submit():
 
-        fecha_actual = datetime.now().date()
+            seleccionados = request.form.getlist('ingredientes')
+            costo_ingredientes = len(seleccionados) * 10
 
-        seleccionados = request.form.getlist('ingredientes')
-        costo_ingredientes = len(seleccionados) * 10
-        ingredientes_texto = [nombres_ingredientes[i] for i in seleccionados]
+            ingredientes_texto = []
+            for i in seleccionados:
+                ingredientes_texto.append(nombres_ingredientes[i])
 
-        precio_base = int(form.tamano.data)
-        tamano_nombre = tamano_texto[form.tamano.data]
+            precio_base = int(form.tamano.data)
+            tamano_nombre = tamano_texto[form.tamano.data]
 
-        cantidad = int(form.cantidad.data)
+            cantidad = int(form.cantidad.data)
 
-        subtotal = (precio_base + costo_ingredientes) * cantidad
+            subtotal = (precio_base + costo_ingredientes) * cantidad
 
-        nuevo_cliente = Cliente(
-            nombre=form.nombre.data,
-            direccion=form.direccion.data,
-            telefono=form.telefono.data
-        )
+            pedido_temp = {
+                "nombre": form.nombre.data,
+                "direccion": form.direccion.data,
+                "telefono": form.telefono.data,
+                "tamano": tamano_nombre,
+                "ingredientes": ", ".join(ingredientes_texto),
+                "cantidad": cantidad,
+                "total": subtotal
+            }
 
-        db.session.add(nuevo_cliente)
-        db.session.commit()
+            pedidos_temp = session.get('pedidos_temp', [])
+            pedidos_temp.append(pedido_temp)
 
-        nueva_pizza = Pizza(
-            tamano=tamano_nombre,
-            ingredientes=", ".join(ingredientes_texto),
-            precio=precio_base
-        )
+            session['pedidos_temp'] = pedidos_temp
 
-        db.session.add(nueva_pizza)
-        db.session.commit()
+            return redirect(url_for('pizza.lista_pizza'))
+        
+        if 'quitar' in request.form:
+            indice = request.form.get("pedido_id")
 
-        nuevo_pedido = Pedido(
-            id_cliente=nuevo_cliente.id_cliente,
-            fecha=fecha_actual,
-            total=subtotal
-        )
+            if indice:
+                indice = int(indice)
+                pedidos_temp = session.get('pedidos_temp', [])
 
-        db.session.add(nuevo_pedido)
-        db.session.commit()
+                nueva_lista = []  
 
-        detalle = DetallePedido(
-            id_pedido=nuevo_pedido.id_pedido,
-            id_pizza=nueva_pizza.id_pizza,
-            cantidad=cantidad,
-            subtotal=subtotal
-        )
+                i = 0
+                while i < len(pedidos_temp):
+                    if i != indice:  
+                        nueva_lista.append(pedidos_temp[i])
+                    i += 1
 
-        db.session.add(detalle)
-        db.session.commit()
+                session['pedidos_temp'] = nueva_lista
 
-        return redirect(url_for('pizza.lista_pizza'))
+            return redirect(url_for('pizza.lista_pizza'))
+        
+        if 'terminar' in request.form:
 
+            pedidos_temp = session.get('pedidos_temp', [])
+            total_pagar = 0
 
-    if 'quitar' in request.form:
+            for p in pedidos_temp:
 
-        pedido_id = request.form.get('pedido_id')
+                cliente = Cliente(
+                    nombre=p["nombre"],
+                    direccion=p["direccion"],
+                    telefono=p["telefono"]
+                )
 
-        if pedido_id:
+                db.session.add(cliente)
+                db.session.commit()
 
-            detalle = DetallePedido.query.filter_by(id_pedido=pedido_id).first()
+                pizza = Pizza(
+                    tamano=p["tamano"],
+                    ingredientes=p["ingredientes"],
+                    precio=p["total"]
+                )
 
-            if detalle:
-                db.session.delete(detalle)
+                db.session.add(pizza)
+                db.session.commit()
 
-            pedido = Pedido.query.get(pedido_id)
+                pedido = Pedido(
+                    id_cliente=cliente.id_cliente,
+                    fecha=datetime.now().date(),
+                    total=p["total"]
+                )
 
-            if pedido:
-                db.session.delete(pedido)
+                db.session.add(pedido)
+                db.session.commit()
 
-            db.session.commit()
+                detalle = DetallePedido(
+                    id_pedido=pedido.id_pedido,
+                    id_pizza=pizza.id_pizza,
+                    cantidad=p["cantidad"],
+                    subtotal=p["total"]
+                )
 
-        return redirect(url_for('pizza.lista_pizza'))
-    
-    if 'terminar' in request.form:
+                db.session.add(detalle)
+                db.session.commit()
 
-        total_pagar = 0
+                total_pagar += p["total"]
 
-        lista_pedidos = Pedido.query.all()
+            session['pedidos_temp'] = []
 
-        for p in lista_pedidos:
-            total_pagar += p.total
-
-        mensaje = "El total a pagar es: $" + str(total_pagar)
+            mensaje = "Pedido realizado. Total a pagar: $" + str(total_pagar)
 
     lista_pedidos = Pedido.query.all()
 
@@ -157,7 +178,7 @@ def lista_pizza():
     return render_template(
     'pizza/listaPizza.html',
     form=form,
-    pedidos=pedidos,
+    pedidos_temp=pedidos_temp,
     ventas_fecha=ventas_fecha,
     total_fecha=total_fecha,
     mensaje=mensaje
