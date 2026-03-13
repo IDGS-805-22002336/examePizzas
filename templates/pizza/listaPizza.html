@@ -101,12 +101,19 @@
             <div class="mt-6">
                 {% if ventas_fecha %}
                     {% for v in ventas_fecha %}
-                        <p class="text-slate-800">{{ v.nombre }} total ${{ v.total }}</p>
+                    <div class="flex justify-between items-center mb-2 bg-yellow-50 p-2 rounded-lg">
+                        <span class="text-slate-800">{{ v.nombre }} total ${{ v.total }}</span>
+                        <a href="{{ url_for('pizza.detalle_venta', id=v.id) }}"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-semibold">
+                            Detalle
+                        </a>
+                    </div>
                     {% endfor %}
                     <div class="mt-4 font-bold text-lg">Total del día: ${{ total_fecha }}</div>
                 {% else %}
                     <p class="text-gray-500">No hay ventas en esta fecha</p>
                 {% endif %}
+            </div>
             </div>
         </div>
 

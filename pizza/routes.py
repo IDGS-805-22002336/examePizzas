@@ -167,6 +167,7 @@ def lista_pizza():
             cliente = Cliente.query.get(p.id_cliente)
 
             ventas_fecha.append({
+                "id": p.id_pedido,
                 "nombre": cliente.nombre,
                 "total": p.total
             })
@@ -183,3 +184,31 @@ def lista_pizza():
     total_fecha=total_fecha,
     mensaje=mensaje
 )
+    
+    
+@pizza.route("/detallePizza", methods=['GET'])
+def detalle_venta():
+    id_pedido = request.args.get('id')
+    pedido = Pedido.query.get(id_pedido)
+    if not pedido:
+        return "Pedido no encontrado", 404
+
+    cliente = Cliente.query.get(pedido.id_cliente)
+    detalles = DetallePedido.query.filter_by(id_pedido=id_pedido).all()
+    detalles_info = []
+
+    for d in detalles:
+        pizza_obj = Pizza.query.get(d.id_pizza)
+        detalles_info.append({
+            "tamano": pizza_obj.tamano,
+            "ingredientes": pizza_obj.ingredientes,
+            "cantidad": d.cantidad,
+            "subtotal": d.subtotal
+        })
+
+    return render_template(
+        "pizza/detallePizza.html",
+        pedido=pedido,
+        cliente=cliente,
+        detalles=detalles_info
+    )
