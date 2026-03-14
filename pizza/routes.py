@@ -31,7 +31,8 @@ def lista_pizza():
     if request.method == "POST":
 
         if 'agregar' in request.form and form.validate_on_submit():
-
+            
+            fecha = request.form.get("fecha")
             seleccionados = request.form.getlist('ingredientes')
             costo_ingredientes = len(seleccionados) * 10
 
@@ -53,7 +54,8 @@ def lista_pizza():
                 "tamano": tamano_nombre,
                 "ingredientes": ", ".join(ingredientes_texto),
                 "cantidad": cantidad,
-                "total": subtotal
+                "total": subtotal,
+                "fecha": fecha
             }
 
             pedidos_temp = session.get('pedidos_temp', [])
@@ -109,7 +111,7 @@ def lista_pizza():
 
                 pedido = Pedido(
                     id_cliente=cliente.id_cliente,
-                    fecha=datetime.now().date(),
+                    fecha=datetime.strptime(p["fecha"], "%Y-%m-%d").date(),
                     total=p["total"]
                 )
 
@@ -169,7 +171,7 @@ def lista_pizza():
             ventas_fecha.append({
                 "id": p.id_pedido,
                 "nombre": cliente.nombre,
-                "total": p.total
+                "total": p.total,
             })
             
             total_fecha += p.total
